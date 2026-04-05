@@ -11,9 +11,10 @@
       <header>
         <h1>Upcoming Interesting Sports Games</h1>
         <p class="subtitle">
-          Last and upcoming matchups for your favorite teams in Phoenix time.
+          Live data refreshed from ESPN in Phoenix, AZ time.
         </p>
-        <p class="meta">Generated: {{ dashboard.generated_at }} | TZ: {{ dashboard.timezone }}</p>
+        <p class="meta">Generated: {{ dashboard.generated_at }} | TZ: {{ dashboard.timezone }} | Sources: {{ dashboard.data_sources | join(', ') }}</p>
+        <p class="meta">{{ dashboard.note }}</p>
       </header>
 
       <div class="grid">
@@ -22,16 +23,36 @@
           {% if dashboard.error %}
             <p class="meta">Backend unavailable: {{ dashboard.error }}</p>
           {% endif %}
+
           {% for item in dashboard.favorites %}
             <article class="team">
-              <h3>{{ item.team }} <span class="badge">{{ item.competition }}</span></h3>
-              <p class="kv"><strong>Last:</strong> {{ item.last_game.rival }} | {{ item.last_game.result }} | {{ item.last_game.date }}</p>
-              <p class="kv"><strong>Venue:</strong> {{ item.last_game.venue }}</p>
-              <p class="kv"><strong>Watch:</strong> {{ item.last_game.where_to_watch }}</p>
-              <p class="kv"><strong>Next:</strong> {{ item.upcoming_game.rival }} | {{ item.upcoming_game.date }}</p>
-              <p class="kv"><strong>Venue:</strong> {{ item.upcoming_game.venue }}</p>
-              <p class="kv"><strong>Watch:</strong> {{ item.upcoming_game.where_to_watch }}</p>
-              <p class="meta"><strong>Standing:</strong> {{ item.standing }}</p>
+              <h3 class="team-title">
+                {% if item.team_logo_url %}
+                  <img class="logo" src="{{ item.team_logo_url }}" alt="{{ item.team }} logo" />
+                {% endif %}
+                <span>{{ item.team }}</span>
+                <span class="badge">{{ item.competition }}</span>
+              </h3>
+
+              {% if item.last_game %}
+                <p class="kv"><strong>Last:</strong> {% if item.last_game.rival_logo_url %}<img class="logo small" src="{{ item.last_game.rival_logo_url }}" alt="{{ item.last_game.rival }} logo" />{% endif %} {{ item.last_game.rival }} | {{ item.last_game.result or item.last_game.status }} | {{ item.last_game.date }}</p>
+                <p class="kv"><strong>Venue:</strong> {{ item.last_game.venue }}</p>
+                <p class="kv"><strong>Watch:</strong> {{ item.last_game.where_to_watch }}</p>
+                <p class="kv"><strong>Source:</strong> <a href="{{ item.last_game.source_url }}" target="_blank" rel="noreferrer">{{ item.last_game.source }}</a></p>
+              {% else %}
+                <p class="kv"><strong>Last:</strong> No recent result found in ESPN window.</p>
+              {% endif %}
+
+              {% if item.upcoming_game %}
+                <p class="kv"><strong>Next:</strong> {% if item.upcoming_game.rival_logo_url %}<img class="logo small" src="{{ item.upcoming_game.rival_logo_url }}" alt="{{ item.upcoming_game.rival }} logo" />{% endif %} {{ item.upcoming_game.rival }} | {{ item.upcoming_game.date }}</p>
+                <p class="kv"><strong>Venue:</strong> {{ item.upcoming_game.venue }}</p>
+                <p class="kv"><strong>Watch:</strong> {{ item.upcoming_game.where_to_watch }}</p>
+                <p class="kv"><strong>Source:</strong> <a href="{{ item.upcoming_game.source_url }}" target="_blank" rel="noreferrer">{{ item.upcoming_game.source }}</a></p>
+              {% else %}
+                <p class="kv"><strong>Next:</strong> No upcoming game found in ESPN window.</p>
+              {% endif %}
+
+              <p class="meta">{{ item.standing_note }}</p>
             </article>
           {% endfor %}
         </section>
@@ -41,14 +62,19 @@
           {% for game in dashboard.spotlight %}
             <article class="team">
               <h3>{{ game.match }}</h3>
+              <p class="kv logos-inline">
+                {% if game.home_logo_url %}<img class="logo small" src="{{ game.home_logo_url }}" alt="home logo" />{% endif %}
+                {% if game.away_logo_url %}<img class="logo small" src="{{ game.away_logo_url }}" alt="away logo" />{% endif %}
+              </p>
               <p class="kv"><strong>Sport:</strong> {{ game.sport }}</p>
               <p class="kv"><strong>Date:</strong> {{ game.date }}</p>
               <p class="kv"><strong>Venue:</strong> {{ game.venue }}</p>
               <p class="kv"><strong>Watch:</strong> {{ game.where_to_watch }}</p>
+              <p class="kv"><strong>Source:</strong> <a href="{{ game.source_url }}" target="_blank" rel="noreferrer">{{ game.source }}</a></p>
             </article>
           {% endfor %}
 
-          <h2>Tournament Snapshots</h2>
+          <h2>Tournament Standings (ESPN)</h2>
           {% for name, rows in dashboard.standings.items() %}
             <h3>{{ name.replace('_', ' ').title() }}</h3>
             <ul class="standing">
