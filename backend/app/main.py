@@ -1,4 +1,6 @@
 ﻿from datetime import datetime, timedelta
+import re
+from html import unescape
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
@@ -15,7 +17,7 @@ PHOENIX_TZ = ZoneInfo("America/Phoenix")
 FIRESTORE_COLLECTION = "items"
 ESPN_SITE_BASE = "https://site.api.espn.com/apis/site/v2/sports"
 
-app = FastAPI(title=APP_TITLE, version="1.1.0")
+app = FastAPI(title=APP_TITLE, version="1.2.0")
 
 LEAGUES: Dict[str, Dict[str, str]] = {
     "la_liga": {"label": "La Liga", "path": "soccer/esp.1"},
@@ -24,6 +26,24 @@ LEAGUES: Dict[str, Dict[str, str]] = {
     "mlb": {"label": "MLB", "path": "baseball/mlb"},
     "nba": {"label": "NBA", "path": "basketball/nba"},
     "f1": {"label": "Formula 1", "path": "racing/f1"},
+}
+
+FOX_STANDINGS_URLS: Dict[str, str] = {
+    "la_liga": "https://www.foxsports.com/soccer/la-liga/standings",
+    "champions": "https://www.foxsports.com/soccer/uefa-champions-league/standings",
+    "liga_mx": "https://www.foxsports.com/soccer/liga-mx/standings",
+    "mlb": "https://www.foxsports.com/mlb/standings",
+    "nba": "https://www.foxsports.com/nba/standings",
+    "f1": "https://www.foxsports.com/motor/formula-1/standings",
+}
+
+GOOGLE_STANDINGS_URLS: Dict[str, str] = {
+    "la_liga": "https://www.google.com/search?q=la+liga+standings",
+    "champions": "https://www.google.com/search?q=uefa+champions+league+standings",
+    "liga_mx": "https://www.google.com/search?q=liga+mx+standings",
+    "mlb": "https://www.google.com/search?q=mlb+standings",
+    "nba": "https://www.google.com/search?q=nba+standings",
+    "f1": "https://www.google.com/search?q=formula+1+standings",
 }
 
 FAVORITES: List[Dict[str, Any]] = [
@@ -56,7 +76,11 @@ FAVORITES: List[Dict[str, Any]] = [
 
 
 def _phoenix_display(dt: datetime) -> str:
-    return dt.astimezone(PHOENIX_TZ).strftime("%Y-%m-%d %I:%M %p MST")
+    local = dt.astimezone(PHOENIX_TZ)
+    hour24 = local.hour
+    hour12 = 12 if hour24 % 12 == 0 else hour24 % 12
+    ampm = "am" if hour24 < 12 else "pm"
+    return f"{local.strftime('%a')}, {local.month}/{local.day} {hour12}:{local.minute:02d}{ampm} MST"
 
 
 def _parse_dt(value: str) -> Optional[datetime]:
@@ -221,11 +245,59 @@ def _parse_standings_rows(data: Dict[str, Any], max_rows: int = 5) -> List[str]:
     return rows
 
 
-def _fetch_standings(client: httpx.Client, league_path: str) -> List[str]:
+def _fetch_fox_standings(client: httpx.Client, league_key: str, max_rows: int = 5) -> List[str]:
+    url = FOX_STANDINGS_URLS.get(league_key, "")
+    if not url:
+        return []
+
+    try:
+        response = client.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=12.0, follow_redirects=True)
+        response.raise_for_status()
+        html = response.text
+    except Exception:
+        return []
+
+    row_blocks = re.findall(r'<tr[^>]+id="tbl-row-[^"]+"[^>]*>(.*?)</tr>', html, flags=re.IGNORECASE | re.DOTALL)
+    rows: List[str] = []
+
+    for block in row_blocks:
+        rank_match = re.search(r'data-index="0".*?<span[^>]*>\s*(\d+)\s*</span>', block, flags=re.DOTALL)
+        team_match = re.search(r'class="table-entity-name[^"]*"[^>]*>(.*?)</a>', block, flags=re.DOTALL)
+        if not rank_match or not team_match:
+            continue
+
+        rank = rank_match.group(1).strip()
+        team_raw = re.sub(r"<[^>]+>", " ", team_match.group(1))
+        team = re.sub(r"\s+", " ", unescape(team_raw)).strip()
+        if not team:
+            continue
+
+        stats = re.findall(r'<span class="table-result"[^>]*>\s*([^<]+?)\s*<!---->\s*</span>', block, flags=re.DOTALL)
+        metric = re.sub(r"\s+", " ", unescape(stats[1])).strip() if len(stats) > 1 else ""
+        if metric:
+            rows.append(f"{rank}. {team} ({metric}) [FOX Sports]")
+        else:
+            rows.append(f"{rank}. {team} [FOX Sports]")
+
+        if len(rows) >= max_rows:
+            break
+
+    return rows
+
+
+def _fetch_standings(client: httpx.Client, league_key: str, league_path: str) -> List[str]:
     url = f"{ESPN_SITE_BASE}/{league_path}/standings"
     data = _fetch_json(client, url, {})
     rows = _parse_standings_rows(data)
-    return rows if rows else ["Unavailable from ESPN right now"]
+    if rows:
+        return rows
+
+    fox_rows = _fetch_fox_standings(client, league_key)
+    if fox_rows:
+        return fox_rows
+
+    google_url = GOOGLE_STANDINGS_URLS.get(league_key, "https://www.google.com/search?q=sports+standings")
+    return [f"Unavailable from ESPN and FOX Sports right now. Check Google standings: {google_url}"]
 
 
 def _build_dashboard() -> Dict[str, Any]:
@@ -280,7 +352,7 @@ def _build_dashboard() -> Dict[str, Any]:
                     "competition": " / ".join(LEAGUES[k]["label"] for k in team["league_keys"]),
                     "last_game": last_game,
                     "upcoming_game": upcoming_game,
-                    "standing_note": "Live standings from ESPN below",
+                    "standing_note": "Live standings from reputable sources below",
                 }
             )
 
@@ -322,22 +394,22 @@ def _build_dashboard() -> Dict[str, Any]:
         spotlight = [{k: v for k, v in s.items() if k != "event_datetime"} for s in spotlight_candidates[:8]]
 
         standings = {
-            "la_liga": _fetch_standings(client, LEAGUES["la_liga"]["path"]),
-            "uefa_champions_league": _fetch_standings(client, LEAGUES["champions"]["path"]),
-            "liga_mx": _fetch_standings(client, LEAGUES["liga_mx"]["path"]),
-            "nba": _fetch_standings(client, LEAGUES["nba"]["path"]),
-            "mlb": _fetch_standings(client, LEAGUES["mlb"]["path"]),
-            "f1": _fetch_standings(client, LEAGUES["f1"]["path"]),
+            "la_liga": _fetch_standings(client, "la_liga", LEAGUES["la_liga"]["path"]),
+            "uefa_champions_league": _fetch_standings(client, "champions", LEAGUES["champions"]["path"]),
+            "liga_mx": _fetch_standings(client, "liga_mx", LEAGUES["liga_mx"]["path"]),
+            "nba": _fetch_standings(client, "nba", LEAGUES["nba"]["path"]),
+            "mlb": _fetch_standings(client, "mlb", LEAGUES["mlb"]["path"]),
+            "f1": _fetch_standings(client, "f1", LEAGUES["f1"]["path"]),
         }
 
     return {
         "generated_at": _phoenix_display(now),
         "timezone": "America/Phoenix",
-        "data_sources": ["ESPN"],
+        "data_sources": ["ESPN", "FOX Sports", "Google"],
         "favorites": favorites,
         "spotlight": spotlight,
         "standings": standings,
-        "note": "Data is fetched live from ESPN on each refresh. If a field is missing, ESPN did not provide it.",
+        "note": "Data is fetched live on each refresh. Standings use ESPN first, then FOX Sports fallback, then Google fallback links.",
     }
 
 
