@@ -1,0 +1,64 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Upcoming Sports Games</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Upcoming Interesting Sports Games</h1>
+        <p class="subtitle">
+          Last and upcoming matchups for your favorite teams in Phoenix time.
+        </p>
+        <p class="meta">Generated: {{ dashboard.generated_at }} | TZ: {{ dashboard.timezone }}</p>
+      </header>
+
+      <div class="grid">
+        <section class="card">
+          <h2>Favorites and Rivals</h2>
+          {% if dashboard.error %}
+            <p class="meta">Backend unavailable: {{ dashboard.error }}</p>
+          {% endif %}
+          {% for item in dashboard.favorites %}
+            <article class="team">
+              <h3>{{ item.team }} <span class="badge">{{ item.competition }}</span></h3>
+              <p class="kv"><strong>Last:</strong> {{ item.last_game.rival }} | {{ item.last_game.result }} | {{ item.last_game.date }}</p>
+              <p class="kv"><strong>Venue:</strong> {{ item.last_game.venue }}</p>
+              <p class="kv"><strong>Watch:</strong> {{ item.last_game.where_to_watch }}</p>
+              <p class="kv"><strong>Next:</strong> {{ item.upcoming_game.rival }} | {{ item.upcoming_game.date }}</p>
+              <p class="kv"><strong>Venue:</strong> {{ item.upcoming_game.venue }}</p>
+              <p class="kv"><strong>Watch:</strong> {{ item.upcoming_game.where_to_watch }}</p>
+              <p class="meta"><strong>Standing:</strong> {{ item.standing }}</p>
+            </article>
+          {% endfor %}
+        </section>
+
+        <aside class="card">
+          <h2>High Profile Up Next</h2>
+          {% for game in dashboard.spotlight %}
+            <article class="team">
+              <h3>{{ game.match }}</h3>
+              <p class="kv"><strong>Sport:</strong> {{ game.sport }}</p>
+              <p class="kv"><strong>Date:</strong> {{ game.date }}</p>
+              <p class="kv"><strong>Venue:</strong> {{ game.venue }}</p>
+              <p class="kv"><strong>Watch:</strong> {{ game.where_to_watch }}</p>
+            </article>
+          {% endfor %}
+
+          <h2>Tournament Snapshots</h2>
+          {% for name, rows in dashboard.standings.items() %}
+            <h3>{{ name.replace('_', ' ').title() }}</h3>
+            <ul class="standing">
+              {% for row in rows %}
+                <li>{{ row }}</li>
+              {% endfor %}
+            </ul>
+          {% endfor %}
+        </aside>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,103 @@
+﻿:root {
+  --bg: #f4f5f7;
+  --ink: #10222f;
+  --accent: #005f73;
+  --accent-2: #ee9b00;
+  --card: #ffffff;
+  --muted: #5a6a74;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  background: linear-gradient(135deg, #f4f5f7 0%, #dbe7ee 100%);
+  color: var(--ink);
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+header {
+  background: linear-gradient(120deg, #0a3344, #005f73);
+  color: #fff;
+  padding: 1.5rem;
+  border-radius: 14px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.subtitle {
+  margin-top: 0.5rem;
+  color: #dff3f8;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.card {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+}
+
+.card h2 {
+  margin-top: 0;
+}
+
+.team {
+  border: 1px solid #d6dde3;
+  border-left: 6px solid var(--accent);
+  border-radius: 10px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.team h3 {
+  margin: 0 0 0.45rem 0;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.kv {
+  margin: 0.2rem 0;
+}
+
+.standing {
+  margin: 0.3rem 0 0.6rem 0;
+  padding-left: 1rem;
+}
+
+.badge {
+  display: inline-block;
+  background: var(--accent-2);
+  color: #1b1b1b;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin-left: 0.3rem;
+}
+
+@media (max-width: 920px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

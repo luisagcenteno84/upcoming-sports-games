@@ -1,0 +1,90 @@
+﻿options:
+  logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _REGION: us-central1
+  _AR_REPO: app-images
+  _BACKEND_SERVICE: upcoming-sports-games-backend
+  _FRONTEND_SERVICE: upcoming-sports-games-frontend
+  _FIRESTORE_COLLECTION: items
+
+steps:
+  - id: "build-backend"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/backend:$SHORT_SHA"
+      - "./backend"
+
+  - id: "push-backend"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/backend:$SHORT_SHA"
+
+  - id: "deploy-backend"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_BACKEND_SERVICE}
+      - --image
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/backend:$SHORT_SHA
+      - --region
+      - ${_REGION}
+      - --platform
+      - managed
+      - --allow-unauthenticated
+      - --set-env-vars
+      - FIRESTORE_COLLECTION=${_FIRESTORE_COLLECTION}
+
+  - id: "capture-backend-url"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud run services describe ${_BACKEND_SERVICE} --region ${_REGION} --format='value(status.url)' > /workspace/backend_url.txt
+
+  - id: "build-frontend"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/frontend:$SHORT_SHA"
+      - "./frontend"
+
+  - id: "push-frontend"
+    name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/frontend:$SHORT_SHA"
+
+  - id: "deploy-frontend"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        BACKEND_URL=$(cat /workspace/backend_url.txt)
+        gcloud run deploy ${_FRONTEND_SERVICE} \
+          --image ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/frontend:$SHORT_SHA \
+          --region ${_REGION} \
+          --platform managed \
+          --allow-unauthenticated \
+          --set-env-vars BACKEND_URL=${BACKEND_URL}
+
+  - id: "show-urls"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        echo "Backend: $(gcloud run services describe ${_BACKEND_SERVICE} --region ${_REGION} --format='value(status.url)')"
+        echo "Frontend: $(gcloud run services describe ${_FRONTEND_SERVICE} --region ${_REGION} --format='value(status.url)')"
+
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/backend:$SHORT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/frontend:$SHORT_SHA"
